@@ -17,6 +17,7 @@ export const config = {
   // Redis
   REDIS_HOST: process.env.REDIS_HOST || 'localhost',
   REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379'),
+  REDIS_USERNAME: process.env.REDIS_USERNAME || '',
   REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
 
   // Redis Stream
@@ -25,4 +26,8 @@ export const config = {
 
   // Logging
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+
+  // Order Service
+  ORDER_SERVICE_BASE_URL: process.env.ORDER_SERVICE_BASE_URL || 'http://localhost:9002/api',
+  ORDER_SERVICE_TOKEN: process.env.ORDER_SERVICE_TOKEN || '',
 } as const;

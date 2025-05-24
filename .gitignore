@@ -67,3 +67,4 @@ logs
 
 # Docker
 docker-compose.override.yml
+notification-service-deploy.sh
