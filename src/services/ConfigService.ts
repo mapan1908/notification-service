@@ -26,30 +26,30 @@ class ConfigService {
 
   // 获取商家通知渠道配置
   public static async getStoreChannelConfigs(
-    storeId: number, 
+    storeCode: string, 
     orderType?: OrderType
   ): Promise<NotificationChannelConfig[]> {
-    const cacheKey = `${this.CACHE_PREFIX}channels:${storeId}:${orderType || 'all'}`;
+    const cacheKey = `${this.CACHE_PREFIX}channels:${storeCode}:${orderType || 'all'}`;
     
     try {
       // 先从缓存获取
       const cached = await RedisService.get(cacheKey);
       if (cached) {
-        LoggerService.debug('Store channel configs loaded from cache', { storeId, orderType });
+        LoggerService.debug('Store channel configs loaded from cache', { storeCode, orderType });
         return JSON.parse(cached);
       }
 
       // 从数据库获取
       let query = `
-        SELECT id, store_id, order_type, channel_type, channel_config, enabled, created_at, updated_at
-        FROM notification_channels 
-        WHERE store_id = ? AND enabled = 1
+        SELECT a.id, b.code, a.order_type, a.channel_type, a.channel_config, a.enabled, a.created_at, a.updated_at
+        FROM notification_channels as a left join stores as b on a.store_id = b.id
+        WHERE b.code = ? AND a.enabled = 1
       `;
       
-      const params: any[] = [storeId];
+      const params: any[] = [storeCode];
       
       if (orderType) {
-        query += ' AND order_type = ?';
+        query += ' AND a.order_type = ?';
         params.push(orderType);
       }
       
@@ -61,41 +61,41 @@ class ConfigService {
       await RedisService.setex(cacheKey, this.CACHE_TTL, JSON.stringify(configs));
 
       LoggerService.debug('Store channel configs loaded from database', { 
-        storeId, 
+        storeCode, 
         orderType, 
         configCount: configs.length 
       });
 
       return configs;
     } catch (error) {
-      LoggerService.error('Failed to get store channel configs', { storeId, orderType, error });
+      LoggerService.error('Failed to get store channel configs', { storeCode, orderType, error });
       return [];
     }
   }
 
   // 获取特定渠道配置
   public static async getChannelConfig(
-    storeId: number,
+    storeCode: string,
     orderType: OrderType,
     channelType: ChannelType
   ): Promise<NotificationChannelConfig | null> {
     try {
       const query = `
-        SELECT id, store_id, order_type, channel_type, channel_config, enabled, created_at, updated_at
-        FROM notification_channels 
-        WHERE store_id = ? AND order_type = ? AND channel_type = ? AND enabled = 1
+        SELECT a.id, b.code, a.order_type, a.channel_type, a.channel_config, a.enabled, a.created_at, a.updated_at
+        FROM notification_channels as a left join stores as b on a.store_id = b.id
+        WHERE b.code = ? AND a.order_type = ? AND a.channel_type = ? AND a.enabled = 1
         LIMIT 1
       `;
 
       const configs = await DatabaseService.query<NotificationChannelConfig[]>(
         query, 
-        [storeId, orderType, channelType]
+        [storeCode, orderType, channelType]
       );
 
       return configs.length > 0 ? configs[0] : null;
     } catch (error) {
       LoggerService.error('Failed to get channel config', { 
-        storeId, 
+        storeCode, 
         orderType, 
         channelType, 
         error 
@@ -106,30 +106,30 @@ class ConfigService {
 
   // 获取微信模板配置
   public static async getWechatTemplateConfig(
-    storeId: number,
+    storeCode: string,
     eventType: NotificationEventType
   ): Promise<WechatTemplateConfig | null> {
-    const cacheKey = `${this.CACHE_PREFIX}wechat_template:${storeId}:${eventType}`;
+    const cacheKey = `${this.CACHE_PREFIX}wechat_template:${storeCode}:${eventType}`;
 
     try {
       // 先从缓存获取
       const cached = await RedisService.get(cacheKey);
       if (cached) {
-        LoggerService.debug('Wechat template config loaded from cache', { storeId, eventType });
+        LoggerService.debug('Wechat template config loaded from cache', { storeCode, eventType });
         return JSON.parse(cached);
       }
 
       // 从数据库获取
       const query = `
-        SELECT id, store_id, template_id, template_name, event_type, field_mapping, enabled, created_at, updated_at
-        FROM wechat_templates 
-        WHERE store_id = ? AND event_type = ? AND enabled = 1
+          SELECT a.id, b.code, a.template_id, a.template_name, a.event_type, a.field_mapping, a.enabled, a.created_at, a.updated_at
+        FROM wechat_templates as a left join stores as b on a.store_id = b.id
+        WHERE b.code = ? AND a.event_type = ? AND a.enabled = 1
         LIMIT 1
       `;
 
       const templates = await DatabaseService.query<WechatTemplateConfig[]>(
         query, 
-        [storeId, eventType]
+          [storeCode, eventType]
       );
 
       const template = templates.length > 0 ? templates[0] : null;
@@ -140,7 +140,7 @@ class ConfigService {
       }
 
       LoggerService.debug('Wechat template config loaded from database', { 
-        storeId, 
+        storeCode, 
         eventType, 
         found: !!template 
       });
@@ -148,148 +148,10 @@ class ConfigService {
       return template;
     } catch (error) {
       LoggerService.error('Failed to get wechat template config', { 
-        storeId, 
+        storeCode, 
         eventType, 
         error 
       });
-      return null;
-    }
-  }
-
-  // 创建通知渠道配置
-  public static async createChannelConfig(data: {
-    store_id: number;
-    order_type: OrderType;
-    channel_type: ChannelType;
-    channel_config: Record<string, any>;
-    enabled?: boolean;
-  }): Promise<number | null> {
-    try {
-      const query = `
-        INSERT INTO notification_channels (store_id, order_type, channel_type, channel_config, enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, NOW(), NOW())
-      `;
-
-      const result = await DatabaseService.execute(query, [
-        data.store_id,
-        data.order_type,
-        data.channel_type,
-        JSON.stringify(data.channel_config),
-        data.enabled ?? true,
-      ]);
-
-      const insertId = (result as any).insertId;
-
-      // 清除相关缓存
-      await this.clearStoreCache(data.store_id);
-
-      LoggerService.info('Channel config created', { 
-        id: insertId,
-        storeId: data.store_id,
-        orderType: data.order_type,
-        channelType: data.channel_type,
-      });
-
-      return insertId;
-    } catch (error) {
-      LoggerService.error('Failed to create channel config', { data, error });
-      return null;
-    }
-  }
-
-  // 更新通知渠道配置
-  public static async updateChannelConfig(
-    id: number,
-    data: {
-      channel_config?: Record<string, any>;
-      enabled?: boolean;
-    }
-  ): Promise<boolean> {
-    try {
-      const setParts: string[] = [];
-      const params: any[] = [];
-
-      if (data.channel_config !== undefined) {
-        setParts.push('channel_config = ?');
-        params.push(JSON.stringify(data.channel_config));
-      }
-
-      if (data.enabled !== undefined) {
-        setParts.push('enabled = ?');
-        params.push(data.enabled);
-      }
-
-      if (setParts.length === 0) {
-        return false;
-      }
-
-      setParts.push('updated_at = NOW()');
-      params.push(id);
-
-      const query = `UPDATE notification_channels SET ${setParts.join(', ')} WHERE id = ?`;
-
-      const result = await DatabaseService.execute(query, params);
-      const affectedRows = (result as any).affectedRows;
-
-      if (affectedRows > 0) {
-        // 获取 store_id 用于清除缓存
-        const storeQuery = 'SELECT store_id FROM notification_channels WHERE id = ?';
-        const storeResult = await DatabaseService.query<{store_id: number}[]>(storeQuery, [id]);
-        
-        if (storeResult.length > 0) {
-          await this.clearStoreCache(storeResult[0].store_id);
-        }
-
-        LoggerService.info('Channel config updated', { id, data });
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      LoggerService.error('Failed to update channel config', { id, data, error });
-      return false;
-    }
-  }
-
-  // 创建微信模板配置
-  public static async createWechatTemplate(data: {
-    store_id: number;
-    template_id: string;
-    template_name: string;
-    event_type: NotificationEventType;
-    field_mapping: Record<string, any>;
-    enabled?: boolean;
-  }): Promise<number | null> {
-    try {
-      const query = `
-        INSERT INTO wechat_templates (store_id, template_id, template_name, event_type, field_mapping, enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `;
-
-      const result = await DatabaseService.execute(query, [
-        data.store_id,
-        data.template_id,
-        data.template_name,
-        data.event_type,
-        JSON.stringify(data.field_mapping),
-        data.enabled ?? true,
-      ]);
-
-      const insertId = (result as any).insertId;
-
-      // 清除相关缓存
-      await this.clearWechatTemplateCache(data.store_id, data.event_type);
-
-      LoggerService.info('Wechat template created', { 
-        id: insertId,
-        storeId: data.store_id,
-        templateId: data.template_id,
-        eventType: data.event_type,
-      });
-
-      return insertId;
-    } catch (error) {
-      LoggerService.error('Failed to create wechat template', { data, error });
       return null;
     }
   }

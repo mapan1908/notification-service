@@ -30,4 +30,8 @@ export const config = {
   // Order Service
   ORDER_SERVICE_BASE_URL: process.env.ORDER_SERVICE_BASE_URL || 'http://localhost:9002/api',
   ORDER_SERVICE_TOKEN: process.env.ORDER_SERVICE_TOKEN || '',
+
+  // ---- 新增 ----
+  // HTTP Client Configuration
+  DEFAULT_HTTP_TIMEOUT_MS: parseInt(process.env.DEFAULT_HTTP_TIMEOUT_MS || '5000'), // 默认5秒超时
 } as const;

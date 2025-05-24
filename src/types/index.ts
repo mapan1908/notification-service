@@ -3,6 +3,7 @@ export enum ChannelType {
   WECHAT_MP = 'wechat_mp',
   WECOM_BOT = 'wecom_bot',
   CLOUD_SPEAKER = 'cloud_speaker',
+  NO_CONFIG = 'no_config',
 }
 
 // 通知事件类型
@@ -67,7 +68,7 @@ export interface StreamMessage {
   orderId: string;
   token: string;
   event: NotificationEventType;
-  storeId: string;
+  storeCode: string;
   timestamp: number;
 }
 
@@ -75,7 +76,7 @@ export interface StreamMessage {
 export interface NotificationLog {
   id?: number;
   order_id: string;
-  store_id: number;
+  store_code: string;
   event_type: NotificationEventType;
   channel_type: ChannelType;
   status: NotificationStatus;

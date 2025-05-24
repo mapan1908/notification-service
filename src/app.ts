@@ -4,7 +4,7 @@ import { config } from './config/config';
 import DatabaseService from './services/DatabaseService';
 import RedisService from './services/RedisService';
 import LoggerService from './services/LoggerService';
-import { configRoutes } from './routes/config';
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
     logger: false, // 禁用 Fastify 内置日志，使用我们的日志系统
@@ -15,7 +15,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: true,
   });
   // 注册路由
-await app.register(configRoutes, { prefix: '/api' });
+
   // 添加请求日志中间件
   app.addHook('onRequest', async (request, reply) => {
     // 在 request 对象上添加开始时间
