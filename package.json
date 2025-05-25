@@ -29,12 +29,12 @@
     "dotenv": "^16.5.0",
     "fastify": "^5.3.3",
     "fastify-plugin": "^5.0.1",
+    "ioredis": "^5.6.1",
     "joi": "^17.13.3",
     "lodash": "^4.17.21",
     "mysql2": "^3.14.1",
-    "p-limit": "^6.2.0",
+    "p-limit": "3",
     "undici": "^7.10.0",
-    "ioredis": "^5.6.1",
     "winston": "^3.17.0"
   },
   "devDependencies": {
