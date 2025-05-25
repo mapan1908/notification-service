@@ -1,164 +1,220 @@
 // src/services/NotificationEngine.ts
-import { StreamMessage, OrderInfo, NotificationChannelConfig , NotificationStatus, NotificationEventType, ChannelType } from '../types'; //
-import { NotificationPayload } from '../types/strategies.types'; //
+import {
+  StreamMessage,
+  OrderInfo,
+  NotificationChannelConfig,
+  NotificationStatus,
+  NotificationEventType,
+  ChannelType,
+} from '../types'; // 确保 StreamMessage 和其他类型已更新以反映 storeCode (如果适用)
+import { NotificationPayload } from '../types/strategies.types';
 import OrderService from './OrderService';
-import ConfigService from './ConfigService'; //
+import { CriticalOrderInfoError } from '../types';
+import ConfigService from './ConfigService';
 import NotificationLogService from './NotificationLogService';
 import { getNotificationStrategy } from '../strategies/StrategyFactory';
-import LoggerService from './LoggerService'; //
+import LoggerService from './LoggerService';
+
+const CONFIG_ISSUE_CHANNEL_MARKER = ChannelType.NO_CONFIG; // 用于配置或数据问题时的日志标记
 
 class NotificationEngine {
-  /**
-   * 处理从 Redis Stream 消费到的单个通知事件。
-   * 这是通知引擎的主要入口点。
-   * @param streamMessage - 从 Redis Stream 解析出的消息对象。
-   * @param originalMessageId - Redis Stream 中的原始消息 ID，用于 ACK。
-   */
   public static async processNotificationEvent(
     streamMessage: StreamMessage,
-    originalMessageId: string // 用于最终ACK，虽然ACK本身在Consumer中
+    originalMessageId: string
   ): Promise<void> {
-    LoggerService.info(`[NotificationEngine] Processing event for orderId: ${streamMessage.orderId}, event: ${streamMessage.event}, messageId: ${originalMessageId}`);
+    const storeCodeFromStream = streamMessage.storeCode; // 假设这是您全局使用的字符串店铺标识
+
+    const logPrefix = `[NotificationEngine order:${streamMessage.orderId} event:${streamMessage.event} msgId:${originalMessageId} storeCode:${storeCodeFromStream}]`;
+    LoggerService.info(`${logPrefix} Received event.`);
+
+    let orderInfo: OrderInfo; // OrderService.getOrderInfo 成功时必有值
+
+    // 校验 storeCodeFromStream (如果需要)
+    if (
+      !storeCodeFromStream ||
+      typeof storeCodeFromStream !== 'string' ||
+      storeCodeFromStream.trim() === ''
+    ) {
+      LoggerService.error(
+        `${logPrefix} 无效或空的 storeCode from stream: '${storeCodeFromStream}'`
+      );
+      await NotificationLogService.logAttempt({
+        order_id: streamMessage.orderId,
+        // store_id: undefined, // 或 store_code: storeCodeFromStream 如果 NotificationLog 已更新
+        event_type: streamMessage.event,
+        channel_type: CONFIG_ISSUE_CHANNEL_MARKER,
+        status: NotificationStatus.FAILED,
+        error_message: `无效或空的 storeCode in stream message: '${storeCodeFromStream}'`,
+      });
+      // 这种基础解析错误，应 ACK 掉，让 Consumer ACK。
+      return;
+    }
 
     // 1. 获取订单信息
-    const orderInfo: OrderInfo | null = await OrderService.getOrderInfo(
-      streamMessage.orderId,
-      streamMessage.storeCode,
-      streamMessage.token // 传递 stream 中的 token
-    );
+    try {
+      // OrderService.getOrderInfo 的第二个参数是 store_code (string)
+      orderInfo = await OrderService.getOrderInfo(
+        streamMessage.orderId,
+        storeCodeFromStream, // 传递字符串 storeCode
+        streamMessage.token,
+        streamMessage.timestamp
+      );
+      // OrderService.getOrderInfo 失败时会抛出 CriticalOrderInfoError
+    } catch (error: any) {
+      LoggerService.error(
+        `${logPrefix} 获取订单信息失败. Error: ${error.message}`
+      );
 
-    if (!orderInfo) {
-      LoggerService.error(`[NotificationEngine] Failed to get order info for orderId: ${streamMessage.orderId}. Skipping notification processing.`);
-      // 考虑: 是否需要记录一条特殊的“处理失败”的 NotificationLog？
-      // 此时还没有 channel_type，但可以记录一个概要日志。
-      // 例如：
+      let attemptsMade = 0;
+      if (error instanceof CriticalOrderInfoError) {
+        attemptsMade = error.attemptsMade;
+      }
+
+      // 记录日志: 使用 store_code (string) 还是 store_id (number)?
+      // 假设 NotificationLog 类型已更新为接受 store_code: string
+      // 或者 NotificationLogService 内部处理转换
       await NotificationLogService.logAttempt({
         order_id: streamMessage.orderId,
-        store_code: streamMessage.storeCode, // 注意类型转换
+        store_code: storeCodeFromStream, // 使用 store_code
         event_type: streamMessage.event,
+        channel_type: CONFIG_ISSUE_CHANNEL_MARKER,
         status: NotificationStatus.FAILED,
-        error_message: 'Failed to retrieve order details.',
-        // channel_type: 'N/A' or a special value
+        error_message: `Critical: 获取订单信息失败. ${error.message}`,
+        retry_count: attemptsMade,
       });
-      return; // 无法获取订单信息，则无法继续
+
+      if (error instanceof CriticalOrderInfoError) {
+        throw error;
+      } else {
+        // 对于 OrderService 抛出的其他未知错误，也视为关键失败
+        throw new CriticalOrderInfoError(
+          `未处理的错误, OrderService: ${error.message}`,
+          attemptsMade, // 或 0
+          error
+        );
+      }
     }
 
-    // 2. 获取商家通知渠道配置
-    // 注意: ConfigService.getStoreChannelConfigs 的 storeId 是 number，而 streamMessage.storeId 是 string
-    const storeCode = streamMessage.storeCode;
-    if (storeCode === '') {
-        LoggerService.error(`[NotificationEngine] Invalid storeId format: ${streamMessage.storeCode} for orderId: ${streamMessage.orderId}`);
-        return;
-    }
-
-    // getStoreChannelConfigs 可能需要根据 order_type 过滤，orderInfo 中有 order_type
-    const channelConfigs: NotificationChannelConfig[] = await ConfigService.getStoreChannelConfigs(
-      storeCode,
-      orderInfo.order_type // 使用获取到的订单的 order_type
-    ); //
+    // 2. 获取渠道配置
+    const channelConfigs: NotificationChannelConfig[] =
+      await ConfigService.getStoreChannelConfigs(
+        storeCodeFromStream, // 传递字符串 storeCode
+        orderInfo.order_type
+      );
 
     if (!channelConfigs || channelConfigs.length === 0) {
-      LoggerService.info(`[NotificationEngine] No enabled notification channels found for storeCode: ${storeCode}, orderType: ${orderInfo.order_type}, event: ${streamMessage.event}. Skipping.`);
-      // 记录一条 SKIPPED 状态的日志
+      LoggerService.info(
+        `${logPrefix} No enabled notification channels found for storeCode: ${storeCodeFromStream}, orderType: ${orderInfo.order_type}, event: ${streamMessage.event}. Skipping.`
+      );
       await NotificationLogService.logAttempt({
         order_id: streamMessage.orderId,
-            store_code: streamMessage.storeCode,
+        store_code: storeCodeFromStream, // 使用 store_code
         event_type: streamMessage.event,
-        channel_type: ChannelType.NO_CONFIG, // 或一个特定的 'NO_CONFIG' 值
-        status: NotificationStatus.SKIPPED, //
-        error_message: 'No enabled notification channels configured for this store/order_type/event combination.',
+        channel_type: CONFIG_ISSUE_CHANNEL_MARKER,
+        status: NotificationStatus.SKIPPED,
+        error_message: '没有启用的通知渠道配置, 店铺/订单类型/事件组合.',
       });
       return;
     }
 
-    LoggerService.info(`[NotificationEngine] Found ${channelConfigs.length} channel(s) for storeCode: ${storeCode}, orderId: ${streamMessage.orderId}`);
+    LoggerService.info(
+      `${logPrefix} Found ${channelConfigs.length} channel(s) for storeCode: ${storeCodeFromStream}.`
+    );
 
     // 3. 遍历启用的渠道配置并发送通知
     for (const channelConfig of channelConfigs) {
-      if (!channelConfig.enabled) { // 双重保险，虽然 getStoreChannelConfigs 应该只返回 enabled=true 的
-        LoggerService.debug(`[NotificationEngine] Channel ${channelConfig.channel_type} for store ${storeCode} is disabled. Skipping.`);
+      // channelConfig.store_id 仍然是 number 类型 (来自 NotificationChannelConfig 定义)
+      // 如果需要与 storeCodeFromStream 比较或使用，注意类型。
+      // 但这里主要用 channelConfig.channel_type 和 channelConfig.enabled
+
+      if (!channelConfig.enabled) {
+        LoggerService.debug(
+          `${logPrefix} Channel ${channelConfig.channel_type} for store_code ${channelConfig.store_code} (code: ${storeCodeFromStream}) is internally marked disabled. Skipping.`
+        );
         continue;
       }
 
       const strategy = getNotificationStrategy(channelConfig.channel_type);
 
       if (!strategy) {
-        LoggerService.warn(`[NotificationEngine] No strategy found for channel type: ${channelConfig.channel_type}. Skipping channel for order ${streamMessage.orderId}.`);
+        LoggerService.warn(
+          `${logPrefix} No strategy found for channel type: ${channelConfig.channel_type}. Skipping channel.`
+        );
         await NotificationLogService.logAttempt({
           order_id: streamMessage.orderId,
-          store_code: streamMessage.storeCode,
+          store_code: storeCodeFromStream, // 使用 store_code
           event_type: streamMessage.event,
           channel_type: channelConfig.channel_type,
           status: NotificationStatus.SKIPPED,
-          error_message: `No notification strategy available for channel type ${channelConfig.channel_type}.`,
+          error_message: `没有找到通知策略, channel type: ${channelConfig.channel_type}.`,
         });
         continue;
       }
 
-      // 准备 NotificationPayload
       const notificationPayload: NotificationPayload = {
-        orderInfo: orderInfo,
+        orderInfo: orderInfo, // orderInfo.store_id 是 number
         event: streamMessage.event,
-        channelConfig: channelConfig,
-        // wechatTemplateConfig: undefined, // 特定于渠道的逻辑可以在策略内部或这里准备
+        channelConfig: channelConfig, // channelConfig.store_id 是 number
       };
 
-      // 特定于渠道的额外配置加载 (例如微信模板)
-      // if (channelConfig.channel_type === ChannelType.WECHAT_MP) {
-      //   const wechatTemplate = await ConfigService.getWechatTemplateConfig(storeIdNumber, streamMessage.event);
-      //   if (!wechatTemplate) {
-      //     LoggerService.warn(`[NotificationEngine] WeChat MP template not found for store ${storeIdNumber}, event ${streamMessage.event}. Skipping WeChat MP notification.`);
-      //     await NotificationLogService.logAttempt({ /* ... log skipped ... */ });
-      //     continue;
-      //   }
-      //   // 将模板信息整合到 payload 中，或由策略自行获取
-      //   // (notificationPayload as any).wechatSpecificTemplate = wechatTemplate; // 示例
-      // }
-
-
-      // 发送通知并记录结果
       const startTime = Date.now();
       let sendResult;
       try {
-        LoggerService.info(`[NotificationEngine] Attempting to send notification via ${channelConfig.channel_type} for order ${streamMessage.orderId}`);
+        LoggerService.info(
+          `${logPrefix} 尝试发送通知, channel type: ${channelConfig.channel_type}.`
+        );
         sendResult = await strategy.send(notificationPayload);
-        
+
         await NotificationLogService.logAttempt({
           order_id: streamMessage.orderId,
-          store_code: streamMessage.storeCode,
+          store_code: storeCodeFromStream, // 使用 store_code
+
           event_type: streamMessage.event,
           channel_type: channelConfig.channel_type,
-          status: sendResult.success ? NotificationStatus.SUCCESS : NotificationStatus.FAILED,
-          request_data: notificationPayload, // 注意：payload可能很大，考虑只记录关键部分或脱敏
+          status: sendResult.success
+            ? NotificationStatus.SUCCESS
+            : NotificationStatus.FAILED,
+          request_data: {
+            orderId: streamMessage.orderId,
+            event: streamMessage.event,
+          }, // 示例：精简记录
           response_data: sendResult.responseData,
           error_message: sendResult.error,
           duration_ms: Date.now() - startTime,
-          // retry_count: 0, // 如果有重试机制，这里会变化
+          retry_count: 0,
         });
 
-        if(sendResult.success) {
-            LoggerService.info(`[NotificationEngine] Notification sent successfully via ${channelConfig.channel_type} for order ${streamMessage.orderId}. MessageId: ${sendResult.messageId}`);
+        if (sendResult.success) {
+          LoggerService.info(
+            `${logPrefix} 通知发送成功, channel type: ${channelConfig.channel_type}. MessageId: ${sendResult.messageId || 'N/A'}`
+          );
         } else {
-            LoggerService.error(`[NotificationEngine] Failed to send notification via ${channelConfig.channel_type} for order ${streamMessage.orderId}. Error: ${sendResult.error}`);
+          LoggerService.error(
+            `${logPrefix} 通知发送失败, channel type: ${channelConfig.channel_type}. Error: ${sendResult.error}`
+          );
         }
-
       } catch (error: any) {
         const durationMs = Date.now() - startTime;
-        LoggerService.error(`[NotificationEngine] Unhandled exception during strategy.send via ${channelConfig.channel_type} for order ${streamMessage.orderId}:`, error);
+        LoggerService.error(
+          `${logPrefix} 未处理的异常, channel type: ${channelConfig.channel_type}:`,
+          error
+        );
         await NotificationLogService.logAttempt({
           order_id: streamMessage.orderId,
-          store_code: streamMessage.storeCode,
+          store_code: storeCodeFromStream, // 使用 store_code
           event_type: streamMessage.event,
           channel_type: channelConfig.channel_type,
           status: NotificationStatus.FAILED,
-          request_data: notificationPayload, // 脱敏
-          error_message: error.message || 'Unhandled exception in strategy',
+          request_data: {
+            orderId: streamMessage.orderId,
+            event: streamMessage.event,
+          },
+          error_message: error.message || '未处理的异常, 策略',
           duration_ms: durationMs,
         });
       }
     }
-    // 所有渠道尝试完毕
-    LoggerService.info(`[NotificationEngine] Finished processing all channels for orderId: ${streamMessage.orderId}, event: ${streamMessage.event}`);
+    LoggerService.info(`${logPrefix} 处理所有渠道完成.`);
   }
 }
 

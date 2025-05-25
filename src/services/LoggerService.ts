@@ -13,19 +13,21 @@ class LoggerService {
         }),
         winston.format.errors({ stack: true }),
         winston.format.json(),
-        winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
-          let log = `${timestamp} [${level.toUpperCase()}]: ${message}`;
-          
-          if (Object.keys(meta).length > 0) {
-            log += ` ${JSON.stringify(meta)}`;
+        winston.format.printf(
+          ({ timestamp, level, message, stack, ...meta }) => {
+            let log = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+
+            if (Object.keys(meta).length > 0) {
+              log += ` ${JSON.stringify(meta)}`;
+            }
+
+            if (stack) {
+              log += `\n${stack}`;
+            }
+
+            return log;
           }
-          
-          if (stack) {
-            log += `\n${stack}`;
-          }
-          
-          return log;
-        })
+        )
       );
 
       // 控制台格式（开发环境更友好）
@@ -36,11 +38,11 @@ class LoggerService {
         }),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
           let log = `${timestamp} ${level}: ${message}`;
-          
+
           if (Object.keys(meta).length > 0) {
             log += ` ${JSON.stringify(meta, null, 2)}`;
           }
-          
+
           return log;
         })
       );
@@ -92,11 +94,11 @@ class LoggerService {
         transports,
         // 处理未捕获的异常
         exceptionHandlers: [
-          new winston.transports.File({ filename: 'logs/exceptions.log' })
+          new winston.transports.File({ filename: 'logs/exceptions.log' }),
         ],
         // 处理未处理的 Promise 拒绝
         rejectionHandlers: [
-          new winston.transports.File({ filename: 'logs/rejections.log' })
+          new winston.transports.File({ filename: 'logs/rejections.log' }),
         ],
       });
     }
@@ -111,10 +113,10 @@ class LoggerService {
 
   public static error(message: string, error?: Error | any): void {
     if (error instanceof Error) {
-      this.getInstance().error(message, { 
-        error: error.message, 
+      this.getInstance().error(message, {
+        error: error.message,
         stack: error.stack,
-        ...error 
+        ...error,
       });
     } else {
       this.getInstance().error(message, error);
@@ -132,7 +134,7 @@ class LoggerService {
   // 通知相关的专用日志方法
   public static notificationSent(data: {
     orderId: string;
-    storeId: number;
+    storeCode: string;
     channelType: string;
     eventType: string;
     duration?: number;
@@ -145,7 +147,7 @@ class LoggerService {
 
   public static notificationFailed(data: {
     orderId: string;
-    storeId: number;
+    storeCode: string;
     channelType: string;
     eventType: string;
     error: string;

@@ -23,9 +23,6 @@ importers:
       fastify-plugin:
         specifier: ^5.0.1
         version: 5.0.1
-      ioredis:
-        specifier: ^5.6.1
-        version: 5.6.1
       joi:
         specifier: ^17.13.3
         version: 17.13.3
@@ -39,9 +36,15 @@ importers:
         specifier: ^3.17.0
         version: 3.17.0
     devDependencies:
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.6.1
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.15.21)(typescript@5.8.3)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
 
 packages:
 

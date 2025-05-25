@@ -1,11 +1,11 @@
 import DatabaseService from './DatabaseService';
 import RedisService from './RedisService';
 import LoggerService from './LoggerService';
-import { 
-  NotificationChannelConfig, 
-  ChannelType, 
+import {
+  NotificationChannelConfig,
+  ChannelType,
   OrderType,
-  NotificationEventType 
+  NotificationEventType,
 } from '../types';
 
 interface WechatTemplateConfig {
@@ -26,16 +26,19 @@ class ConfigService {
 
   // 获取商家通知渠道配置
   public static async getStoreChannelConfigs(
-    storeCode: string, 
+    storeCode: string,
     orderType?: OrderType
   ): Promise<NotificationChannelConfig[]> {
     const cacheKey = `${this.CACHE_PREFIX}channels:${storeCode}:${orderType || 'all'}`;
-    
+
     try {
       // 先从缓存获取
       const cached = await RedisService.get(cacheKey);
       if (cached) {
-        LoggerService.debug('Store channel configs loaded from cache', { storeCode, orderType });
+        LoggerService.debug('Store channel configs loaded from cache', {
+          storeCode,
+          orderType,
+        });
         return JSON.parse(cached);
       }
 
@@ -45,30 +48,41 @@ class ConfigService {
         FROM notification_channels as a left join stores as b on a.store_id = b.id
         WHERE b.code = ? AND a.enabled = 1
       `;
-      
+
       const params: any[] = [storeCode];
-      
+
       if (orderType) {
         query += ' AND a.order_type = ?';
         params.push(orderType);
       }
-      
+
       query += ' ORDER BY id';
 
-      const configs = await DatabaseService.query<NotificationChannelConfig[]>(query, params);
+      const configs = await DatabaseService.query<NotificationChannelConfig[]>(
+        query,
+        params
+      );
 
       // 写入缓存
-      await RedisService.setex(cacheKey, this.CACHE_TTL, JSON.stringify(configs));
+      await RedisService.setex(
+        cacheKey,
+        this.CACHE_TTL,
+        JSON.stringify(configs)
+      );
 
-      LoggerService.debug('Store channel configs loaded from database', { 
-        storeCode, 
-        orderType, 
-        configCount: configs.length 
+      LoggerService.debug('Store channel configs loaded from database', {
+        storeCode,
+        orderType,
+        configCount: configs.length,
       });
 
       return configs;
     } catch (error) {
-      LoggerService.error('Failed to get store channel configs', { storeCode, orderType, error });
+      LoggerService.error('Failed to get store channel configs', {
+        storeCode,
+        orderType,
+        error,
+      });
       return [];
     }
   }
@@ -88,17 +102,17 @@ class ConfigService {
       `;
 
       const configs = await DatabaseService.query<NotificationChannelConfig[]>(
-        query, 
+        query,
         [storeCode, orderType, channelType]
       );
 
       return configs.length > 0 ? configs[0] : null;
     } catch (error) {
-      LoggerService.error('Failed to get channel config', { 
-        storeCode, 
-        orderType, 
-        channelType, 
-        error 
+      LoggerService.error('Failed to get channel config', {
+        storeCode,
+        orderType,
+        channelType,
+        error,
       });
       return null;
     }
@@ -115,7 +129,10 @@ class ConfigService {
       // 先从缓存获取
       const cached = await RedisService.get(cacheKey);
       if (cached) {
-        LoggerService.debug('Wechat template config loaded from cache', { storeCode, eventType });
+        LoggerService.debug('Wechat template config loaded from cache', {
+          storeCode,
+          eventType,
+        });
         return JSON.parse(cached);
       }
 
@@ -128,75 +145,86 @@ class ConfigService {
       `;
 
       const templates = await DatabaseService.query<WechatTemplateConfig[]>(
-        query, 
-          [storeCode, eventType]
+        query,
+        [storeCode, eventType]
       );
 
       const template = templates.length > 0 ? templates[0] : null;
 
       // 写入缓存
       if (template) {
-        await RedisService.setex(cacheKey, this.CACHE_TTL, JSON.stringify(template));
+        await RedisService.setex(
+          cacheKey,
+          this.CACHE_TTL,
+          JSON.stringify(template)
+        );
       }
 
-      LoggerService.debug('Wechat template config loaded from database', { 
-        storeCode, 
-        eventType, 
-        found: !!template 
+      LoggerService.debug('Wechat template config loaded from database', {
+        storeCode,
+        eventType,
+        found: !!template,
       });
 
       return template;
     } catch (error) {
-      LoggerService.error('Failed to get wechat template config', { 
-        storeCode, 
-        eventType, 
-        error 
+      LoggerService.error('Failed to get wechat template config', {
+        storeCode,
+        eventType,
+        error,
       });
       return null;
     }
   }
 
   // 清除商家配置缓存
-  public static async clearStoreCache(storeId: number): Promise<void> {
+  public static async clearStoreCache(storeCode: string): Promise<void> {
     try {
-      const pattern = `${this.CACHE_PREFIX}channels:${storeId}:*`;
-      
+      const pattern = `${this.CACHE_PREFIX}channels:${storeCode}:*`;
+
       // 注意：这是一个简化的实现，生产环境中可能需要更复杂的缓存清除策略
       const keys = [
-        `${this.CACHE_PREFIX}channels:${storeId}:all`,
-        `${this.CACHE_PREFIX}channels:${storeId}:${OrderType.DINE_IN}`,
-        `${this.CACHE_PREFIX}channels:${storeId}:${OrderType.PICKUP}`,
-        `${this.CACHE_PREFIX}channels:${storeId}:${OrderType.DELIVERY}`,
+        `${this.CACHE_PREFIX}channels:${storeCode}:all`,
+        `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.DINE_IN}`,
+        `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.PICKUP}`,
+        `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.DELIVERY}`,
       ];
 
       for (const key of keys) {
         await RedisService.del(key);
       }
 
-      LoggerService.debug('Store cache cleared', { storeId });
+      LoggerService.debug('Store cache cleared', { storeCode });
     } catch (error) {
-      LoggerService.error('Failed to clear store cache', { storeId, error });
+      LoggerService.error('Failed to clear store cache', { storeCode, error });
     }
   }
 
   // 清除微信模板缓存
   public static async clearWechatTemplateCache(
-    storeId: number, 
+    storeCode: string,
     eventType: NotificationEventType
   ): Promise<void> {
     try {
-      const key = `${this.CACHE_PREFIX}wechat_template:${storeId}:${eventType}`;
+      const key = `${this.CACHE_PREFIX}wechat_template:${storeCode}:${eventType}`;
       await RedisService.del(key);
 
-      LoggerService.debug('Wechat template cache cleared', { storeId, eventType });
+      LoggerService.debug('Wechat template cache cleared', {
+        storeCode,
+        eventType,
+      });
     } catch (error) {
-      LoggerService.error('Failed to clear wechat template cache', { storeId, eventType, error });
+      LoggerService.error('Failed to clear wechat template cache', {
+        storeCode,
+        eventType,
+        error,
+      });
     }
   }
 
   // 验证配置格式
   public static validateChannelConfig(
-    channelType: ChannelType, 
+    channelType: ChannelType,
     config: Record<string, any>
   ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];

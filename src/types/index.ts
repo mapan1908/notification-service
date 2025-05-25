@@ -37,7 +37,7 @@ export enum OrderType {
 // 通知渠道配置接口
 export interface NotificationChannelConfig {
   id: number;
-  store_id: number;
+  store_code: string;
   order_type: OrderType;
   channel_type: ChannelType;
   channel_config: Record<string, any>;
@@ -50,7 +50,7 @@ export interface NotificationChannelConfig {
 export interface OrderInfo {
   order_id: string;
   order_number?: string;
-  store_id: number;
+  store_code: string;
   user_id: number;
   order_type: OrderType;
   contact_name?: string;
@@ -87,4 +87,21 @@ export interface NotificationLog {
   retry_count: number;
   created_at: Date;
   updated_at: Date;
+}
+
+/**
+ * 自定义错误，表示获取订单信息时发生严重且已重试多次的失败，或通知已过时。
+ */
+export class CriticalOrderInfoError extends Error {
+  public readonly originalError?: any;
+  public readonly attemptsMade: number;
+
+  constructor(message: string, attemptsMade: number, originalError?: any) {
+    super(message);
+    this.name = 'CriticalOrderInfoError';
+    this.attemptsMade = attemptsMade;
+    this.originalError = originalError;
+    // Ensures the prototype chain is correct for custom errors
+    Object.setPrototypeOf(this, CriticalOrderInfoError.prototype);
+  }
 }
