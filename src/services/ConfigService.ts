@@ -1,34 +1,14 @@
 import DatabaseService from './DatabaseService';
 import RedisService from './RedisService';
 import LoggerService from './LoggerService';
-import {
-  NotificationChannelConfig,
-  ChannelType,
-  OrderType,
-  NotificationEventType,
-} from '../types';
-
-interface WechatTemplateConfig {
-  id: number;
-  store_id: number;
-  template_id: string;
-  template_name: string;
-  event_type: NotificationEventType;
-  field_mapping: Record<string, any>;
-  enabled: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
+import { NotificationChannelConfig, ChannelType, OrderType, NotificationEventType, WechatTemplateConfig } from '../types';
 
 class ConfigService {
   private static readonly CACHE_PREFIX = 'notification_config:';
   private static readonly CACHE_TTL = 300; // 5分钟缓存
 
   // 获取商家通知渠道配置
-  public static async getStoreChannelConfigs(
-    storeCode: string,
-    orderType?: OrderType
-  ): Promise<NotificationChannelConfig[]> {
+  public static async getStoreChannelConfigs(storeCode: string, orderType?: OrderType): Promise<NotificationChannelConfig[]> {
     const cacheKey = `${this.CACHE_PREFIX}channels:${storeCode}:${orderType || 'all'}`;
 
     try {
@@ -44,9 +24,9 @@ class ConfigService {
 
       // 从数据库获取
       let query = `
-        SELECT a.id, b.code, a.order_type, a.channel_type, a.channel_config, a.enabled, a.created_at, a.updated_at
+        SELECT a.id, b.store_code, a.order_type, a.channel_type, a.channel_config, a.enabled, a.created_at, a.updated_at
         FROM notification_channels as a left join stores as b on a.store_id = b.id
-        WHERE b.code = ? AND a.enabled = 1
+        WHERE b.store_code = ? AND a.enabled = 1
       `;
 
       const params: any[] = [storeCode];
@@ -58,17 +38,10 @@ class ConfigService {
 
       query += ' ORDER BY id';
 
-      const configs = await DatabaseService.query<NotificationChannelConfig[]>(
-        query,
-        params
-      );
+      const configs = await DatabaseService.query<NotificationChannelConfig[]>(query, params);
 
       // 写入缓存
-      await RedisService.setex(
-        cacheKey,
-        this.CACHE_TTL,
-        JSON.stringify(configs)
-      );
+      await RedisService.setex(cacheKey, this.CACHE_TTL, JSON.stringify(configs));
 
       LoggerService.debug('Store channel configs loaded from database', {
         storeCode,
@@ -88,23 +61,16 @@ class ConfigService {
   }
 
   // 获取特定渠道配置
-  public static async getChannelConfig(
-    storeCode: string,
-    orderType: OrderType,
-    channelType: ChannelType
-  ): Promise<NotificationChannelConfig | null> {
+  public static async getChannelConfig(storeCode: string, orderType: OrderType, channelType: ChannelType): Promise<NotificationChannelConfig | null> {
     try {
       const query = `
-        SELECT a.id, b.code, a.order_type, a.channel_type, a.channel_config, a.enabled, a.created_at, a.updated_at
+        SELECT a.id, b.store_code, a.order_type, a.channel_type, a.channel_config, a.enabled, a.created_at, a.updated_at
         FROM notification_channels as a left join stores as b on a.store_id = b.id
-        WHERE b.code = ? AND a.order_type = ? AND a.channel_type = ? AND a.enabled = 1
+        WHERE b.store_code = ? AND a.order_type = ? AND a.channel_type = ? AND a.enabled = 1
         LIMIT 1
       `;
 
-      const configs = await DatabaseService.query<NotificationChannelConfig[]>(
-        query,
-        [storeCode, orderType, channelType]
-      );
+      const configs = await DatabaseService.query<NotificationChannelConfig[]>(query, [storeCode, orderType, channelType]);
 
       return configs.length > 0 ? configs[0] : null;
     } catch (error) {
@@ -119,10 +85,7 @@ class ConfigService {
   }
 
   // 获取微信模板配置
-  public static async getWechatTemplateConfig(
-    storeCode: string,
-    eventType: NotificationEventType
-  ): Promise<WechatTemplateConfig | null> {
+  public static async getWechatTemplateConfig(storeCode: string, eventType: NotificationEventType): Promise<WechatTemplateConfig | null> {
     const cacheKey = `${this.CACHE_PREFIX}wechat_template:${storeCode}:${eventType}`;
 
     try {
@@ -138,26 +101,19 @@ class ConfigService {
 
       // 从数据库获取
       const query = `
-          SELECT a.id, b.code, a.template_id, a.template_name, a.event_type, a.field_mapping, a.enabled, a.created_at, a.updated_at
-        FROM wechat_templates as a left join stores as b on a.store_id = b.id
-        WHERE b.code = ? AND a.event_type = ? AND a.enabled = 1
+          SELECT a.id, b.store_code, a.template_id, a.template_name, a.event_type, a.field_mapping, a.enabled, a.created_at, a.updated_at
+        FROM wechat_template_configs as a left join stores as b on a.store_id = b.id
+        WHERE b.store_code = ? AND a.event_type = ? AND a.enabled = 1
         LIMIT 1
       `;
 
-      const templates = await DatabaseService.query<WechatTemplateConfig[]>(
-        query,
-        [storeCode, eventType]
-      );
+      const templates = await DatabaseService.query<WechatTemplateConfig[]>(query, [storeCode, eventType]);
 
       const template = templates.length > 0 ? templates[0] : null;
 
       // 写入缓存
       if (template) {
-        await RedisService.setex(
-          cacheKey,
-          this.CACHE_TTL,
-          JSON.stringify(template)
-        );
+        await RedisService.setex(cacheKey, this.CACHE_TTL, JSON.stringify(template));
       }
 
       LoggerService.debug('Wechat template config loaded from database', {
@@ -183,12 +139,7 @@ class ConfigService {
       const pattern = `${this.CACHE_PREFIX}channels:${storeCode}:*`;
 
       // 注意：这是一个简化的实现，生产环境中可能需要更复杂的缓存清除策略
-      const keys = [
-        `${this.CACHE_PREFIX}channels:${storeCode}:all`,
-        `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.DINE_IN}`,
-        `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.PICKUP}`,
-        `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.DELIVERY}`,
-      ];
+      const keys = [`${this.CACHE_PREFIX}channels:${storeCode}:all`, `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.DINE_IN}`, `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.PICKUP}`, `${this.CACHE_PREFIX}channels:${storeCode}:${OrderType.DELIVERY}`];
 
       for (const key of keys) {
         await RedisService.del(key);
@@ -201,10 +152,7 @@ class ConfigService {
   }
 
   // 清除微信模板缓存
-  public static async clearWechatTemplateCache(
-    storeCode: string,
-    eventType: NotificationEventType
-  ): Promise<void> {
+  public static async clearWechatTemplateCache(storeCode: string, eventType: NotificationEventType): Promise<void> {
     try {
       const key = `${this.CACHE_PREFIX}wechat_template:${storeCode}:${eventType}`;
       await RedisService.del(key);
@@ -223,10 +171,7 @@ class ConfigService {
   }
 
   // 验证配置格式
-  public static validateChannelConfig(
-    channelType: ChannelType,
-    config: Record<string, any>
-  ): { valid: boolean; errors: string[] } {
+  public static validateChannelConfig(channelType: ChannelType, config: Record<string, any>): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     switch (channelType) {

@@ -9,18 +9,13 @@ const HEALTH_CHECK_URL = `${config.ORDER_SERVICE_BASE_URL}${config.ORDER_SERVICE
 const HEALTH_STATUS_KEY = config.ORDER_SERVICE_HEALTH_STATUS_REDIS_KEY;
 const HEALTH_STATUS_TTL = config.ORDER_SERVICE_HEALTH_STATUS_TTL_S;
 const CHECK_INTERVAL = config.ORDER_SERVICE_HEALTH_CHECK_INTERVAL_MS;
-const HEALTH_CHECK_TIMEOUT = Math.min(
-  config.DEFAULT_HTTP_TIMEOUT_MS,
-  CHECK_INTERVAL - 1000
-); // 健康检查的超时应小于检查间隔
+const HEALTH_CHECK_TIMEOUT = Math.min(config.DEFAULT_HTTP_TIMEOUT_MS, CHECK_INTERVAL - 1000); // 健康检查的超时应小于检查间隔
 
 let intervalId: NodeJS.Timeout | null = null;
 let currentHealthStatus: boolean = false; // 本地缓存一份状态，减少Redis读取（可选）
 
 async function checkOrderStatus(): Promise<boolean> {
-  LoggerService.debug(
-    '[HealthChecker] Performing Order Service health check...'
-  );
+  LoggerService.debug('[HealthChecker] 开始订单服务健康检查...');
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
 
@@ -30,33 +25,24 @@ async function checkOrderStatus(): Promise<boolean> {
       dispatcher: defaultHttpAgent,
       signal: controller.signal,
       headers: {
-        // 如果健康检查也需要Token，在这里添加
-        // 'Authorization': `Bearer ${config.ORDER_SERVICE_TOKEN}`,
         Accept: 'application/json',
       },
     });
     clearTimeout(timeoutId);
 
     if (statusCode >= 200 && statusCode < 300) {
-      LoggerService.debug('[HealthChecker] Order Service is healthy.');
+      LoggerService.debug('[HealthChecker] 订单服务健康检查成功.');
       return true;
     } else {
-      LoggerService.warn(
-        `[HealthChecker] Order Service health check failed with status: ${statusCode}`
-      );
+      LoggerService.warn(`[HealthChecker] 订单服务健康检查失败，状态码: ${statusCode}`);
       return false;
     }
   } catch (error: any) {
     clearTimeout(timeoutId); // 确保清理
     if (error.name === 'AbortError') {
-      LoggerService.warn(
-        '[HealthChecker] Order Service health check timed out.'
-      );
+      LoggerService.warn('[HealthChecker] 订单服务健康检查超时.');
     } else {
-      LoggerService.warn(
-        '[HealthChecker] Order Service health check failed with error:',
-        error.message
-      );
+      LoggerService.warn('[HealthChecker] 订单服务健康检查失败，错误信息:', error.message);
     }
     return false;
   }
@@ -66,29 +52,18 @@ async function updateHealthStatusInRedis(isHealthy: boolean): Promise<void> {
   try {
     // 将状态写入Redis并设置TTL，这样即使本检测器实例挂掉，状态也会在一段时间后过期
     // 其他服务实例可以通过读取这个key来获取最新状态
-    await RedisService.set(
-      HEALTH_STATUS_KEY,
-      isHealthy ? '1' : '0',
-      HEALTH_STATUS_TTL
-    );
+    await RedisService.set(HEALTH_STATUS_KEY, isHealthy ? '1' : '0', HEALTH_STATUS_TTL);
     currentHealthStatus = isHealthy; // 更新本地缓存
-    LoggerService.debug(
-      `[HealthChecker] Updated Order Service health status in Redis to: ${isHealthy}`
-    );
+    LoggerService.debug(`[HealthChecker] 更新订单服务健康状态到Redis: ${isHealthy}`);
   } catch (error) {
-    LoggerService.error(
-      '[HealthChecker] Failed to update health status in Redis:',
-      error
-    );
+    LoggerService.error('[HealthChecker] 更新订单服务健康状态到Redis失败:', error);
     // 如果Redis更新失败，依赖本地缓存的 currentHealthStatus 可能不准确，但检测会继续
   }
 }
 
 async function runCheckCycle(): Promise<void> {
   if (!config.ORDER_SERVICE_HEALTH_CHECK_ENABLED) {
-    LoggerService.info(
-      '[HealthChecker] Order Service health check is disabled via config.'
-    );
+    LoggerService.info('[HealthChecker] 订单服务健康检查已禁用.');
     // 如果禁用，可以考虑在Redis中设置一个默认的健康状态或不设置
     // 为了简单，如果禁用，则假定服务是健康的，或者让依赖方自行处理无状态的情况
     // 或者，如果禁用，则不启动定时器，调用 isOrderServiceHealthy() 时返回一个默认值。
@@ -103,9 +78,7 @@ async function runCheckCycle(): Promise<void> {
 export class OrderServiceHealthChecker {
   public static async start(): Promise<void> {
     if (!config.ORDER_SERVICE_HEALTH_CHECK_ENABLED) {
-      LoggerService.info(
-        '[HealthChecker] Order Service health check is disabled. Not starting checker.'
-      );
+      LoggerService.info('[HealthChecker] 订单服务健康检查已禁用. 不启动检查器.');
       // 确保在禁用时，Redis中有一个表示“健康”的值或没有值（让读取方处理默认）
       // 我们可以在禁用时，也写入一个 "1" 到 Redis，并设置TTL，或者根本不写，让 getHealthStatus 处理默认
       // 简单起见，如果禁用，我们可以在首次调用 isOrderServiceHealthy 时返回true
@@ -114,12 +87,10 @@ export class OrderServiceHealthChecker {
     }
 
     if (intervalId) {
-      LoggerService.warn('[HealthChecker] Health checker is already running.');
+      LoggerService.warn('[HealthChecker] 订单服务健康检查器已运行.');
       return;
     }
-    LoggerService.info(
-      `[HealthChecker] Starting Order Service health checker. Interval: ${CHECK_INTERVAL}ms`
-    );
+    LoggerService.info(`[HealthChecker] 启动订单服务健康检查. 间隔: ${CHECK_INTERVAL}ms`);
     // 立即执行一次检查，然后设置定时器
     await runCheckCycle();
     intervalId = setInterval(runCheckCycle, CHECK_INTERVAL);
@@ -129,9 +100,7 @@ export class OrderServiceHealthChecker {
     if (intervalId) {
       clearInterval(intervalId);
       intervalId = null;
-      LoggerService.info(
-        '[HealthChecker] Order Service health checker stopped.'
-      );
+      LoggerService.info('[HealthChecker] 订单服务健康检查器已停止.');
     }
   }
 
@@ -141,6 +110,7 @@ export class OrderServiceHealthChecker {
    * @returns Promise<boolean> - true 如果健康，false 如果不健康或未知（例如Redis读取失败）
    */
   public static async isOrderServiceHealthy(): Promise<boolean> {
+    LoggerService.debug('[HealthChecker] 检查订单服务健康状态...');
     if (!config.ORDER_SERVICE_HEALTH_CHECK_ENABLED) {
       return true; // 如果禁用了健康检查，默认服务是健康的
     }
@@ -153,18 +123,13 @@ export class OrderServiceHealthChecker {
       } else {
         // Redis中没有状态 (可能首次启动，或TTL过期，或checker未运行/失败)
         // 这种情况下，可以返回一个默认的不健康状态，或者触发一次立即检查
-        LoggerService.warn(
-          `[HealthChecker] Health status key '${HEALTH_STATUS_KEY}' not found in Redis or value invalid. Assuming unhealthy or triggering check.`
-        );
+        LoggerService.warn(`[HealthChecker] Redis中没有健康状态键 '${HEALTH_STATUS_KEY}' 或值无效. 假设不健康或触发检查.`);
         // 为避免在首次检查前都返回不健康，可以考虑返回 currentHealthStatus (本地缓存)
         // 或者更保守地返回 false
         return currentHealthStatus; // 或者 return false;
       }
     } catch (error) {
-      LoggerService.error(
-        '[HealthChecker] Failed to get health status from Redis. Assuming unhealthy.',
-        error
-      );
+      LoggerService.error('[HealthChecker] 从Redis获取健康状态失败. 假设不健康.', error);
       return false; // Redis 故障，保守假设不健康
     }
   }

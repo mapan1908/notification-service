@@ -67,7 +67,7 @@ export const config = {
   // 订单服务相关配置 (Order Service)
   // =========================
   /** 订单服务基础 URL */
-  ORDER_SERVICE_BASE_URL: process.env.ORDER_SERVICE_BASE_URL || 'http://localhost:9002/api',
+  ORDER_SERVICE_BASE_URL: process.env.ORDER_SERVICE_BASE_URL || 'http://localhost:3000/api',
   /** 订单服务访问 Token */
   ORDER_SERVICE_TOKEN: process.env.ORDER_SERVICE_TOKEN || '',
   /** 订单服务重试延迟（毫秒数组，逗号分隔） */

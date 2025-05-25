@@ -38,12 +38,12 @@ class OrderService {
     const logPrefix = `[OrderService._fetchOnce order:${orderId} storeCode:${storeCode} attempt:${attemptNumber || 1}]`;
     LoggerService.debug(`${logPrefix} Attempting API call.`);
 
-    const requestUrl = `${ORDER_SERVICE_BASE_URL}/orders/${orderId}?store_code=${storeCode}`; // API端点应使用 storeCode
+    const requestUrl = `${ORDER_SERVICE_BASE_URL}/internal/notify/store/${storeCode}/order/${orderId}`; // API端点应使用 storeCode
     const effectiveToken = apiToken || FALLBACK_ORDER_SERVICE_TOKEN;
 
     if (!effectiveToken) {
-      LoggerService.error(`${logPrefix} Missing API token.`);
-      throw new Error('API token is missing for OrderService request.');
+      LoggerService.error(`${logPrefix} Api token 不存在.`);
+      throw new Error('Api token 不存在.');
     }
 
     let timeoutId: NodeJS.Timeout | undefined;
@@ -51,9 +51,7 @@ class OrderService {
 
     try {
       timeoutId = setTimeout(() => {
-        LoggerService.warn(
-          `${logPrefix} API request is aborting due to timeout (${config.DEFAULT_HTTP_TIMEOUT_MS}ms).`
-        );
+        LoggerService.warn(`${logPrefix} API request 超时 (${config.DEFAULT_HTTP_TIMEOUT_MS}ms).`);
         controller.abort();
       }, config.DEFAULT_HTTP_TIMEOUT_MS);
 
@@ -97,31 +95,20 @@ class OrderService {
             created_at: new Date(orderInfoData.created_at),
             updated_at: new Date(orderInfoData.updated_at),
           };
-          LoggerService.debug(
-            `${logPrefix} Successfully fetched and parsed order info from API.`
-          );
+          LoggerService.debug(`${logPrefix} 从API获取订单信息成功.`);
           return orderInfo;
         } else {
-          LoggerService.warn(
-            `${logPrefix} API returned 200 but data is invalid or missing order_id. Response:`,
-            responseData
-          );
+          LoggerService.warn(`${logPrefix} API 返回 200 但数据无效或缺少 order_id. 响应:`, responseData);
           return null; // 数据无效
         }
       } else if (statusCode === 404) {
-        LoggerService.warn(
-          `${logPrefix} API returned 404 Not Found. Order likely does not exist.`
-        );
+        LoggerService.warn(`${logPrefix} API 返回 404 Not Found. 订单可能不存在.`);
         return null; // 订单不存在
       } else if (statusCode >= 500) {
-        LoggerService.error(
-          `${logPrefix} API server error. Status: ${statusCode}. Response: ${responseText}`
-        );
-        throw new Error(`Order API server error: ${statusCode}`); // 抛出以触发快速重试
+        LoggerService.error(`${logPrefix} API 服务错误. 状态: ${statusCode}. 响应: ${responseText}`);
+        throw new Error(`API 服务错误: ${statusCode}`); // 抛出以触发快速重试
       } else {
-        LoggerService.warn(
-          `${logPrefix} API client error (e.g., 4xx other than 404). Status: ${statusCode}. Response: ${responseText}`
-        );
+        LoggerService.warn(`${logPrefix} API 客户端错误 (例如, 4xx 其他不是 404). 状态: ${statusCode}. 响应: ${responseText}`);
         return null; // 其他客户端错误，通常不重试
       }
     } catch (error: any) {
@@ -132,11 +119,9 @@ class OrderService {
         clearTimeout(timeoutId);
       }
       if (error.name === 'AbortError') {
-        LoggerService.error(`${logPrefix} API request timed out.`);
+        LoggerService.error(`${logPrefix} API 请求超时.`);
       } else {
-        LoggerService.error(
-          `${logPrefix} API request failed: ${error.message}`
-        );
+        LoggerService.error(`${logPrefix} API 请求失败: ${error.message}`);
       }
       throw error; // 将错误向上抛，由 getOrderInfo 的快速重试逻辑处理
     }
@@ -153,19 +138,10 @@ class OrderService {
     const logPrefix = `[OrderService.getOrderInfo order:${orderId} storeCode:${storeCode}]`;
     let attemptsMade = 0;
 
-    // 1. 检查初始时效性
-    if (
-      originalEventTimestamp &&
-      Date.now() - originalEventTimestamp >
-        config.ORDER_SERVICE_MAX_NOTIFICATION_AGE_MS
-    ) {
-      LoggerService.warn(
-        `${logPrefix} 通知已过时 (event ts: ${originalEventTimestamp}). 终止.`
-      );
-      throw new CriticalOrderInfoError(
-        `通知已过时 (超过 ${config.ORDER_SERVICE_MAX_NOTIFICATION_AGE_MS / 1000 / 60} 分钟), order ${orderId}.`,
-        attemptsMade
-      );
+    // 1. 检查初始时效性(默认10分钟)
+    if (originalEventTimestamp && Date.now() - originalEventTimestamp > config.ORDER_SERVICE_MAX_NOTIFICATION_AGE_MS) {
+      LoggerService.warn(`${logPrefix} 通知已过时 (event ts: ${originalEventTimestamp}). 终止.`);
+      throw new CriticalOrderInfoError(`通知已过时 (超过 ${config.ORDER_SERVICE_MAX_NOTIFICATION_AGE_MS / 1000 / 60} 分钟), order ${orderId}.`, attemptsMade);
     }
 
     // 2. 尝试从共享 Redis 缓存获取
@@ -175,42 +151,26 @@ class OrderService {
       if (cachedOrderString) {
         const orderInfoFromCache = JSON.parse(cachedOrderString) as OrderInfo;
         // 假设 OrderInfo 类型已更新为包含 store_code: string
-        if (
-          orderInfoFromCache &&
-          orderInfoFromCache.order_id &&
-          orderInfoFromCache.store_code === storeCode
-        ) {
-          orderInfoFromCache.created_at = new Date(
-            orderInfoFromCache.created_at
-          );
-          orderInfoFromCache.updated_at = new Date(
-            orderInfoFromCache.updated_at
-          );
+        if (orderInfoFromCache && orderInfoFromCache.order_id && orderInfoFromCache.store.store_code === storeCode) {
+          orderInfoFromCache.created_at = new Date(orderInfoFromCache.created_at).toISOString();
+          orderInfoFromCache.updated_at = new Date(orderInfoFromCache.updated_at).toISOString();
           LoggerService.info(`${logPrefix} 从共享缓存中获取到订单信息.`);
           return orderInfoFromCache;
         } else {
-          LoggerService.warn(
-            `${logPrefix} 共享缓存中数据无效或店铺不匹配, ${sharedCacheKey}. 将尝试API.`
-          );
+          LoggerService.warn(`${logPrefix} 共享缓存中数据无效或店铺不匹配, ${sharedCacheKey}. 将尝试API.`);
         }
       } else {
-        LoggerService.debug(
-          `${logPrefix} 共享缓存中没有找到订单信息. 将尝试API.`
-        );
+        LoggerService.debug(`${logPrefix} 共享缓存中没有找到订单信息. 将尝试API.`);
       }
     } catch (redisError: any) {
-      LoggerService.warn(
-        `${logPrefix} 访问共享Redis缓存失败, ${sharedCacheKey}. 将尝试API. 错误: ${redisError.message}`
-      );
+      LoggerService.warn(`${logPrefix} 访问共享Redis缓存失败, ${sharedCacheKey}. 将尝试API. 错误: ${redisError.message}`);
     }
 
     // 3. 检查订单服务健康状态 (集成健康检查器)
     if (config.ORDER_SERVICE_HEALTH_CHECK_ENABLED) {
       const isHealthy = await OrderServiceHealthChecker.isOrderServiceHealthy();
       if (!isHealthy) {
-        LoggerService.warn(
-          `${logPrefix} 订单服务当前标记为不健康. 快速失败并不ACK消息.`
-        );
+        LoggerService.warn(`${logPrefix} 订单服务当前标记为不健康. 快速失败并不ACK消息.`);
         throw new CriticalOrderInfoError(
           `订单服务 (${ORDER_SERVICE_BASE_URL}) 当前不健康，获取订单 ${orderId} 失败.`,
           attemptsMade // 0 次API尝试
@@ -228,14 +188,8 @@ class OrderService {
       LoggerService.info(`${currentAttemptLogPrefix} 尝试从API获取订单信息.`);
 
       // 4a. 每次尝试前再次检查时效性
-      if (
-        originalEventTimestamp &&
-        Date.now() - originalEventTimestamp >
-          config.ORDER_SERVICE_MAX_NOTIFICATION_AGE_MS
-      ) {
-        LoggerService.warn(
-          `${currentAttemptLogPrefix} 通知在快速重试期间已过时 (event ts: ${originalEventTimestamp}). 终止.`
-        );
+      if (originalEventTimestamp && Date.now() - originalEventTimestamp > config.ORDER_SERVICE_MAX_NOTIFICATION_AGE_MS) {
+        LoggerService.warn(`${currentAttemptLogPrefix} 通知在快速重试期间已过时 (event ts: ${originalEventTimestamp}). 终止.`);
         throw new CriticalOrderInfoError(
           `通知已过时, order ${orderId}.`,
           attemptsMade - 1, // 之前的尝试次数
@@ -244,23 +198,14 @@ class OrderService {
       }
 
       try {
-        const orderInfoFromApi = await this._fetchOrderInfoFromApiOnce(
-          orderId,
-          storeCode,
-          streamToken,
-          attemptsMade
-        );
+        const orderInfoFromApi = await this._fetchOrderInfoFromApiOnce(orderId, storeCode, streamToken, attemptsMade);
         if (orderInfoFromApi) {
-          LoggerService.info(
-            `${currentAttemptLogPrefix} 从API获取订单信息成功.`
-          );
+          LoggerService.info(`${currentAttemptLogPrefix} 从API获取订单信息成功.`);
           return orderInfoFromApi;
         }
         // 如果 _fetchOrderInfoFromApiOnce 返回 null (例如 404, 或业务上无效数据)
         // 这被视为确定性失败，不应因这个原因继续重试。
-        LoggerService.warn(
-          `${currentAttemptLogPrefix} API返回null (例如, 订单不存在或数据无效). 判定为关键失败.`
-        );
+        LoggerService.warn(`${currentAttemptLogPrefix} API返回null (例如, 订单不存在或数据无效). 判定为关键失败.`);
         throw new CriticalOrderInfoError(
           `API明确返回无法获取订单数据 (如404或无效数据) for order ${orderId}.`,
           attemptsMade,
@@ -268,28 +213,18 @@ class OrderService {
         );
       } catch (error: any) {
         lastError = error;
-        LoggerService.warn(
-          `${currentAttemptLogPrefix} API快速尝试失败. 错误: ${error.message}`
-        );
+        LoggerService.warn(`${currentAttemptLogPrefix} API快速尝试失败. 错误: ${error.message}`);
         if (attemptsMade === quickRetryAttempts) {
           // 这是最后一次快速尝试也失败了
-          LoggerService.error(
-            `${currentAttemptLogPrefix} 所有 ${quickRetryAttempts} 次API快速尝试均失败, order ${orderId}.`
-          );
-          throw new CriticalOrderInfoError(
-            `从API获取订单信息失败 (所有快速尝试均失败), order ${orderId}.`,
-            attemptsMade,
-            lastError
-          );
+          LoggerService.error(`${currentAttemptLogPrefix} 所有 ${quickRetryAttempts} 次API快速尝试均失败, order ${orderId}.`);
+          throw new CriticalOrderInfoError(`从API获取订单信息失败 (所有快速尝试均失败), order ${orderId}.`, attemptsMade, lastError);
         }
       }
 
       // 准备下一次快速重试 (如果不是最后一次)
       if (attemptsMade < quickRetryAttempts) {
         const delay = config.ORDER_SERVICE_QUICK_RETRY_DELAY_MS;
-        LoggerService.info(
-          `${currentAttemptLogPrefix} 等待 ${delay}ms 后进行下一次API快速尝试 (${attemptsMade + 1}/${quickRetryAttempts}).`
-        );
+        LoggerService.info(`${currentAttemptLogPrefix} 等待 ${delay}ms 后进行下一次API快速尝试 (${attemptsMade + 1}/${quickRetryAttempts}).`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }

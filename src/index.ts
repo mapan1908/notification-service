@@ -10,7 +10,7 @@ const consumer = new OrderEventConsumer();
 
 async function start() {
   try {
-    LoggerService.info('Starting notification service...', {
+    LoggerService.info('notification service... 开始启动', {
       nodeEnv: config.NODE_ENV,
       port: config.PORT,
       logLevel: config.LOG_LEVEL,
@@ -35,19 +35,19 @@ async function start() {
       host: '0.0.0.0',
     });
 
-    LoggerService.info('Notification service started successfully', {
+    LoggerService.info('notification service... 启动成功', {
       port: config.PORT,
       environment: config.NODE_ENV,
     });
   } catch (err) {
-    LoggerService.error('Error starting server', err);
+    LoggerService.error('notification service... 启动失败', err);
     process.exit(1);
   }
 }
 
 // 优雅关闭
 async function shutdown() {
-  LoggerService.info('Shutting down notification service...');
+  LoggerService.info('notification service... 开始关闭');
 
   OrderServiceHealthChecker.stop(); // 停止健康检查器
   // 停止消费者
@@ -55,9 +55,9 @@ async function shutdown() {
   try {
     await DatabaseService.close();
     await RedisService.disconnect();
-    LoggerService.info('Graceful shutdown completed');
+    LoggerService.info('notification service... 关闭成功');
   } catch (error) {
-    LoggerService.error('Error during shutdown', error);
+    LoggerService.error('notification service... 关闭失败', error);
   }
 
   process.exit(0);
@@ -68,12 +68,12 @@ process.on('SIGINT', shutdown);
 
 // 处理未捕获的异常
 process.on('uncaughtException', (error) => {
-  LoggerService.error('Uncaught Exception', error);
+  LoggerService.error('notification service... 未捕获异常', error);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  LoggerService.error('Unhandled Rejection', {
+  LoggerService.error('notification service... 未处理拒绝', {
     reason,
     promise,
   });

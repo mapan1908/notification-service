@@ -2,12 +2,7 @@
 import { request } from 'undici';
 import { NotificationPayload, SendResult } from '../types/strategies.types'; // 或者 '../types/strategies.types'
 import LoggerService from '../services/LoggerService'; //
-import {
-  OrderInfo,
-  NotificationEventType,
-  NotificationStatus,
-  OrderType,
-} from '../types'; //
+import { OrderInfo, NotificationEventType, NotificationStatus, OrderType } from '../types'; //
 import { INotificationStrategy } from './NotificationStrategy';
 import { defaultHttpAgent } from '../utils/httpClient';
 import { config } from '../config/config';
@@ -27,18 +22,11 @@ export class WecomBotStrategy implements INotificationStrategy {
     // 我们需要安全地转换为我们期望的 WecomBotChannelConfig
     const botConfig = channelConfig.channel_config as WecomBotChannelConfig;
 
-    if (
-      !botConfig ||
-      !botConfig.webhook_url ||
-      typeof botConfig.webhook_url !== 'string'
-    ) {
-      LoggerService.error(
-        '[WecomBotStrategy] Webhook URL is missing or invalid in channel_config.',
-        {
-          channelId: channelConfig.id,
-          storeCode: channelConfig.store_code,
-        }
-      );
+    if (!botConfig || !botConfig.webhook_url || typeof botConfig.webhook_url !== 'string') {
+      LoggerService.error('[WecomBotStrategy] Webhook URL is missing or invalid in channel_config.', {
+        channelId: channelConfig.id,
+        storeCode: channelConfig.store_code,
+      });
       return {
         success: false,
         error: 'Webhook URL is missing or invalid.',
@@ -64,10 +52,7 @@ export class WecomBotStrategy implements INotificationStrategy {
       // 这里简单处理，实际可能需要更复杂的逻辑来嵌入到 markdown content 中
       // requestBody.markdown.mentioned_list = botConfig.mention_list; // Markdown类型不支持这个字段，需要在content里实现
     }
-    if (
-      botConfig.mention_mobile_list &&
-      botConfig.mention_mobile_list.length > 0
-    ) {
+    if (botConfig.mention_mobile_list && botConfig.mention_mobile_list.length > 0) {
       // requestBody.markdown.mentioned_mobile_list = botConfig.mention_mobile_list; // Markdown类型不支持这个字段
     }
 
@@ -77,10 +62,7 @@ export class WecomBotStrategy implements INotificationStrategy {
       requestBody,
     });
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      config.DEFAULT_HTTP_TIMEOUT_MS
-    );
+    const timeoutId = setTimeout(() => controller.abort(), config.DEFAULT_HTTP_TIMEOUT_MS);
     try {
       const { statusCode, body } = await request(botConfig.webhook_url, {
         method: 'POST',
@@ -96,13 +78,10 @@ export class WecomBotStrategy implements INotificationStrategy {
       const responseData = responseText ? JSON.parse(responseText) : {}; // 尝试解析JSON
 
       if (statusCode === 200 && responseData.errcode === 0) {
-        LoggerService.info(
-          '[WecomBotStrategy] Message sent successfully to WeCom Bot.',
-          {
-            webhook: botConfig.webhook_url,
-            response: responseData,
-          }
-        );
+        LoggerService.info('[WecomBotStrategy] Message sent successfully to WeCom Bot.', {
+          webhook: botConfig.webhook_url,
+          response: responseData,
+        });
         return {
           success: true,
           messageId: responseData.msgid, // 企微机器人不直接返回 msgid 在这个响应体中，但可以记录响应
@@ -110,15 +89,12 @@ export class WecomBotStrategy implements INotificationStrategy {
           status: NotificationStatus.SUCCESS,
         };
       } else {
-        LoggerService.error(
-          '[WecomBotStrategy] Failed to send message to WeCom Bot.',
-          {
-            webhook: botConfig.webhook_url,
-            statusCode,
-            response: responseData,
-            requestBodySent: requestBody, // 记录发送的内容以供调试
-          }
-        );
+        LoggerService.error('[WecomBotStrategy] Failed to send message to WeCom Bot.', {
+          webhook: botConfig.webhook_url,
+          statusCode,
+          response: responseData,
+          requestBodySent: requestBody, // 记录发送的内容以供调试
+        });
         return {
           success: false,
           error: `WeCom Bot API Error: ${responseData.errmsg || 'Unknown error'} (Code: ${responseData.errcode || statusCode})`,
@@ -127,15 +103,12 @@ export class WecomBotStrategy implements INotificationStrategy {
         };
       }
     } catch (error: any) {
-      LoggerService.error(
-        '[WecomBotStrategy] Exception while sending message to WeCom Bot:',
-        {
-          webhook: botConfig.webhook_url,
-          error: error.message,
-          stack: error.stack,
-          requestBodySent: requestBody,
-        }
-      );
+      LoggerService.error('[WecomBotStrategy] Exception while sending message to WeCom Bot:', {
+        webhook: botConfig.webhook_url,
+        error: error.message,
+        stack: error.stack,
+        requestBodySent: requestBody,
+      });
       return {
         success: false,
         error: error.message || 'Exception occurred',
@@ -152,10 +125,7 @@ export class WecomBotStrategy implements INotificationStrategy {
    * @param event - 事件类型
    * @returns 格式化后的 Markdown 字符串
    */
-  private formatMessage(
-    orderInfo: OrderInfo,
-    event: NotificationEventType
-  ): string {
+  private formatMessage(orderInfo: OrderInfo, event: NotificationEventType): string {
     // 这里可以根据不同的事件类型生成不同的消息内容
     // 以下是一个简单的示例
     let title = '📢 新消息提醒';

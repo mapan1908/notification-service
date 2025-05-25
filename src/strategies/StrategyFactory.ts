@@ -5,6 +5,7 @@ import { WecomBotStrategy } from './WecomBotStrategy'; // 我们已设计的第�
 // import { WechatMpStrategy } from './WechatMpStrategy'; // 未来会添加
 // import { CloudSpeakerStrategy } from './CloudSpeakerStrategy'; // 未来会添加
 import LoggerService from '../services/LoggerService'; //
+import { WechatMpStrategy } from './WechatMpStrategy';
 
 // 缓存策略实例，避免重复创建（简单实现，可选）
 // 注意：如果策略是有状态的，或者每次调用需要全新实例，则不应缓存。
@@ -29,23 +30,23 @@ export function getNotificationStrategy(channelType: ChannelType): INotification
     case ChannelType.WECOM_BOT: //
       strategyInstance = new WecomBotStrategy();
       break;
-    // case ChannelType.WECHAT_MP: //
-    //   strategyInstance = new WechatMpStrategy();
-    //   break;
+    case ChannelType.WECHAT_MP: // <--- 新增 case
+      strategyInstance = new WechatMpStrategy();
+      break;
     // case ChannelType.CLOUD_SPEAKER: //
     //   strategyInstance = new CloudSpeakerStrategy();
     //   break;
     default:
-      LoggerService.warn(`[StrategyFactory] No strategy found for channel type: ${channelType}`);
+      LoggerService.warn(`[StrategyFactory] 没有找到策略 for channel type: ${channelType}`);
       return null; // 或抛出错误，或返回一个默认的空操作策略
   }
 
   // 缓存新创建的实例
   if (strategyInstance) {
     strategyCache[channelType] = strategyInstance;
-    LoggerService.debug(`[StrategyFactory] Created and cached strategy for ${channelType}`);
+    LoggerService.debug(`[StrategyFactory] 创建并缓存策略 for ${channelType}`);
   }
-  
+
   return strategyInstance;
 }
 

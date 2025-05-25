@@ -131,7 +131,7 @@ class OrderEventConsumer {
         // 1. 检查订单服务健康状态
         if (config.ORDER_SERVICE_HEALTH_CHECK_ENABLED) {
           const isOrderServiceHealthy = await OrderServiceHealthChecker.isOrderServiceHealthy();
-          LoggerService.debug(`[Consumer] ${CONSUMER_NAME} Health check result: ${isOrderServiceHealthy}`); // 添加日志
+          LoggerService.debug(`[Consumer] ${CONSUMER_NAME} 健康检查结果: ${isOrderServiceHealthy}`); // 添加日志
           if (!isOrderServiceHealthy) {
             const unhealthyPauseMs = config.STREAM_POLL_INTERVAL_IF_ORDER_SERVICE_UNHEALTHY_MS;
             LoggerService.warn(`[Consumer] ${CONSUMER_NAME} 检测到订单服务不健康，将暂停轮询 ${unhealthyPauseMs / 1000} 秒. (Raw ms: ${unhealthyPauseMs}, Type: ${typeof unhealthyPauseMs})`);
@@ -160,7 +160,7 @@ class OrderEventConsumer {
         const currentActiveTasks = this.limit.activeCount + this.limit.pendingCount;
         if (currentActiveTasks >= config.STREAM_MAX_CONCURRENT_TASKS) {
           const fullPauseMs = config.STREAM_POLL_INTERVAL_IF_FULL_MS;
-          LoggerService.debug(`[Consumer] ${CONSUMER_NAME} 并发任务数已达上限 (${currentActiveTasks}/${config.STREAM_MAX_CONCURRENT_TASKS}). 将暂停轮询 ${fullPauseMs / 1000}秒. (Raw ms: ${fullPauseMs}, Type: ${typeof fullPauseMs})`);
+          LoggerService.debug(`[Consumer] ${CONSUMER_NAME} 并发任务数已达上限 (${currentActiveTasks}/${config.STREAM_MAX_CONCURRENT_TASKS}). 将暂停轮询 ${fullPauseMs / 1000}秒. (Raw ms: ${fullPauseMs}`);
 
           LoggerService.info(`[Consumer] ${CONSUMER_NAME} 开始暂停轮询 (因并发满) @ ${new Date().toISOString()}`);
           const pauseStarted = Date.now();
