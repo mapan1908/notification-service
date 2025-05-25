@@ -26,6 +26,9 @@ importers:
       fastify-plugin:
         specifier: ^5.0.1
         version: 5.0.1
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.6.1
       joi:
         specifier: ^17.13.3
         version: 17.13.3
@@ -51,9 +54,6 @@ importers:
       '@types/p-limit':
         specifier: ^2.2.0
         version: 2.2.0
-      ioredis:
-        specifier: ^5.6.1
-        version: 5.6.1
       prettier:
         specifier: ^3.5.3
         version: 3.5.3
