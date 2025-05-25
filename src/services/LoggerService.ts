@@ -13,21 +13,19 @@ class LoggerService {
         }),
         winston.format.errors({ stack: true }),
         winston.format.json(),
-        winston.format.printf(
-          ({ timestamp, level, message, stack, ...meta }) => {
-            let log = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+        winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
+          let log = `${timestamp} [${level.toUpperCase()}]: ${message}`;
 
-            if (Object.keys(meta).length > 0) {
-              log += ` ${JSON.stringify(meta)}`;
-            }
-
-            if (stack) {
-              log += `\n${stack}`;
-            }
-
-            return log;
+          if (Object.keys(meta).length > 0) {
+            log += ` ${JSON.stringify(meta)}`;
           }
-        )
+
+          if (stack) {
+            log += `\n${stack}`;
+          }
+
+          return log;
+        })
       );
 
       // 控制台格式（开发环境更友好）
@@ -93,13 +91,9 @@ class LoggerService {
         format: logFormat,
         transports,
         // 处理未捕获的异常
-        exceptionHandlers: [
-          new winston.transports.File({ filename: 'logs/exceptions.log' }),
-        ],
+        exceptionHandlers: [new winston.transports.File({ filename: 'logs/exceptions.log' })],
         // 处理未处理的 Promise 拒绝
-        rejectionHandlers: [
-          new winston.transports.File({ filename: 'logs/rejections.log' }),
-        ],
+        rejectionHandlers: [new winston.transports.File({ filename: 'logs/rejections.log' })],
       });
     }
 
@@ -132,61 +126,35 @@ class LoggerService {
   }
 
   // 通知相关的专用日志方法
-  public static notificationSent(data: {
-    orderId: string;
-    storeCode: string;
-    channelType: string;
-    eventType: string;
-    duration?: number;
-  }): void {
+  public static notificationSent(data: { orderId: string; storeCode: string; channelType: string; eventType: string; duration?: number }): void {
     this.info('Notification sent successfully', {
       type: 'notification_success',
       ...data,
     });
   }
 
-  public static notificationFailed(data: {
-    orderId: string;
-    storeCode: string;
-    channelType: string;
-    eventType: string;
-    error: string;
-    retryCount?: number;
-  }): void {
+  public static notificationFailed(data: { orderId: string; storeCode: string; channelType: string; eventType: string; error: string; retryCount?: number }): void {
     this.error('Notification failed', {
       type: 'notification_failed',
       ...data,
     });
   }
 
-  public static streamMessageProcessed(data: {
-    messageId: string;
-    orderId: string;
-    eventType: string;
-    processingTime?: number;
-  }): void {
+  public static streamMessageProcessed(data: { messageId: string; orderId: string; eventType: string; processingTime?: number }): void {
     this.info('Stream message processed', {
       type: 'stream_processed',
       ...data,
     });
   }
 
-  public static databaseQuery(data: {
-    query: string;
-    duration?: number;
-    affectedRows?: number;
-  }): void {
+  public static databaseQuery(data: { query: string; duration?: number; affectedRows?: number }): void {
     this.debug('Database query executed', {
       type: 'database_query',
       ...data,
     });
   }
 
-  public static redisOperation(data: {
-    operation: string;
-    key?: string;
-    duration?: number;
-  }): void {
+  public static redisOperation(data: { operation: string; key?: string; duration?: number }): void {
     this.debug('Redis operation executed', {
       type: 'redis_operation',
       ...data,

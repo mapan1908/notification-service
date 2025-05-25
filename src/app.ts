@@ -20,7 +20,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.addHook('onRequest', async (request, reply) => {
     // 在 request 对象上添加开始时间
     (request as any).startTime = Date.now();
-    
+
     LoggerService.info('Incoming request', {
       method: request.method,
       url: request.url,
@@ -33,7 +33,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.addHook('onResponse', async (request, reply) => {
     const startTime = (request as any).startTime || Date.now();
     const responseTime = Date.now() - startTime;
-    
+
     LoggerService.info('Response sent', {
       method: request.method,
       url: request.url,

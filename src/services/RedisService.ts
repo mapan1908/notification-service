@@ -104,11 +104,7 @@ class RedisService {
   }
 
   // 设置缓存
-  public static async set(
-    key: string,
-    value: string,
-    ttl?: number
-  ): Promise<boolean> {
+  public static async set(key: string, value: string, ttl?: number): Promise<boolean> {
     const startTime = Date.now();
 
     try {
@@ -133,11 +129,7 @@ class RedisService {
   }
 
   // 设置带过期时间的缓存
-  public static async setex(
-    key: string,
-    seconds: number,
-    value: string
-  ): Promise<boolean> {
+  public static async setex(key: string, seconds: number, value: string): Promise<boolean> {
     const startTime = Date.now();
 
     try {

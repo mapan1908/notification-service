@@ -1,6 +1,7 @@
 {
   "name": "notification-service",
   "version": "1.0.0",
+  "packageManager": "pnpm@10.11.0",
   "main": "index.js",
   "directories": {
     "doc": "docs",
@@ -31,12 +32,15 @@
     "joi": "^17.13.3",
     "lodash": "^4.17.21",
     "mysql2": "^3.14.1",
+    "p-limit": "^6.2.0",
     "undici": "^7.10.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
     "@types/lodash": "^4.17.17",
+    "@types/p-limit": "^2.2.0",
     "ioredis": "^5.6.1",
+    "prettier": "^3.5.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
