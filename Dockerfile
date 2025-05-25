@@ -3,6 +3,7 @@
 # 我们将在这个阶段安装 pnpm 并构建应用
 FROM node:18-alpine AS builder
 
+
 # 设置工作目录
 WORKDIR /app
 
@@ -50,6 +51,8 @@ WORKDIR /app
 
 # 设置 Node.js 运行环境为 production
 ENV NODE_ENV=production
+# 新增：设置时区为亚洲/上海
+ENV TZ=Asia/Shanghai  
 
 # 从 builder 阶段复制生产依赖
 # 如果上一步使用了 `pnpm prune --prod`，node_modules 就只包含生产依赖了
