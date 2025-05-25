@@ -67,7 +67,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       error: true,
       message,
       statusCode,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toLocaleString(),
     });
   });
 
@@ -83,7 +83,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       error: true,
       message: 'Route not found',
       statusCode: 404,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toLocaleString(),
     });
   });
 
@@ -96,7 +96,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     const result = {
       status,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toLocaleString(),
       service: 'notification-service',
       version: '1.0.0',
       uptime: process.uptime(),
@@ -125,7 +125,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       service: 'notification-service',
       version: '1.0.0',
       environment: config.NODE_ENV,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toLocaleString(),
       endpoints: {
         health: '/health',
         api: '/api',

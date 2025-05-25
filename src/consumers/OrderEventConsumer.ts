@@ -136,7 +136,7 @@ class OrderEventConsumer {
             const unhealthyPauseMs = config.STREAM_POLL_INTERVAL_IF_ORDER_SERVICE_UNHEALTHY_MS;
             LoggerService.warn(`[Consumer] ${CONSUMER_NAME} 检测到订单服务不健康，将暂停轮询 ${unhealthyPauseMs / 1000} 秒. (Raw ms: ${unhealthyPauseMs}, Type: ${typeof unhealthyPauseMs})`);
 
-            LoggerService.info(`[Consumer] ${CONSUMER_NAME} 开始暂停轮询 (因订单服务不健康) @ ${new Date().toISOString()}`);
+            LoggerService.info(`[Consumer] ${CONSUMER_NAME} 开始暂停轮询 (因订单服务不健康) @ ${new Date().toLocaleString()}`);
             const pauseStarted = Date.now();
 
             await new Promise((resolve) => {
@@ -145,7 +145,7 @@ class OrderEventConsumer {
               this.pollTimeoutId = setTimeout(resolve, unhealthyPauseMs);
             });
             const pauseDuration = Date.now() - pauseStarted;
-            LoggerService.info(`[Consumer] ${CONSUMER_NAME} 结束暂停轮询 (因订单服务不健康) @ ${new Date().toISOString()}. 实际暂停: ${pauseDuration}ms`);
+            LoggerService.info(`[Consumer] ${CONSUMER_NAME} 结束暂停轮询 (因订单服务不健康) @ ${new Date().toLocaleString()}. 实际暂停: ${pauseDuration}ms`);
 
             this.pollTimeoutId = null; // 清理 pollTimeoutId
             if (!this.isRunning) {
@@ -162,14 +162,14 @@ class OrderEventConsumer {
           const fullPauseMs = config.STREAM_POLL_INTERVAL_IF_FULL_MS;
           LoggerService.debug(`[Consumer] ${CONSUMER_NAME} 并发任务数已达上限 (${currentActiveTasks}/${config.STREAM_MAX_CONCURRENT_TASKS}). 将暂停轮询 ${fullPauseMs / 1000}秒. (Raw ms: ${fullPauseMs}`);
 
-          LoggerService.info(`[Consumer] ${CONSUMER_NAME} 开始暂停轮询 (因并发满) @ ${new Date().toISOString()}`);
+          LoggerService.info(`[Consumer] ${CONSUMER_NAME} 开始暂停轮询 (因并发满) @ ${new Date().toLocaleString()}`);
           const pauseStarted = Date.now();
 
           await new Promise((resolve) => {
             this.pollTimeoutId = setTimeout(resolve, fullPauseMs);
           });
           const pauseDuration = Date.now() - pauseStarted;
-          LoggerService.info(`[Consumer] ${CONSUMER_NAME} 结束暂停轮询 (因并发满) @ ${new Date().toISOString()}. 实际暂停: ${pauseDuration}ms`);
+          LoggerService.info(`[Consumer] ${CONSUMER_NAME} 结束暂停轮询 (因并发满) @ ${new Date().toLocaleString()}. 实际暂停: ${pauseDuration}ms`);
 
           this.pollTimeoutId = null;
           if (!this.isRunning) {
