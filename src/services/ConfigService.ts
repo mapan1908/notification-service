@@ -101,7 +101,7 @@ class ConfigService {
 
       // 从数据库获取
       const query = `
-          SELECT a.id, b.store_code, a.template_id, a.template_name, a.event_type, a.field_mapping, a.enabled, a.created_at, a.updated_at
+          SELECT a.id, b.store_code, a.template_id, a.template_name, a.event_type, a.field_mapping, a.miniprogram, a.url, a.enabled, a.created_at, a.updated_at
         FROM wechat_template_configs as a left join stores as b on a.store_id = b.id
         WHERE  a.event_type = ? AND a.enabled = 1
         LIMIT 1
