@@ -103,11 +103,12 @@ class ConfigService {
       const query = `
           SELECT a.id, b.store_code, a.template_id, a.template_name, a.event_type, a.field_mapping, a.enabled, a.created_at, a.updated_at
         FROM wechat_template_configs as a left join stores as b on a.store_id = b.id
-        WHERE b.store_code = ? AND a.event_type = ? AND a.enabled = 1
+        WHERE  a.event_type = ? AND a.enabled = 1
         LIMIT 1
       `;
 
-      const templates = await DatabaseService.query<WechatTemplateConfig[]>(query, [storeCode, eventType]);
+      // const templates = await DatabaseService.query<WechatTemplateConfig[]>(query, [storeCode, eventType]);
+      const templates = await DatabaseService.query<WechatTemplateConfig[]>(query, [eventType]);
 
       const template = templates.length > 0 ? templates[0] : null;
 

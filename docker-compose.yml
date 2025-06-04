@@ -1,44 +1,35 @@
-version: '3.8'
+version: '3.9'
 
 services:
-  notification-service:
-    build: .
+  frontend:
+    image: mapan694/font-app:latest
+    container_name: font-app
     ports:
-      - "3000:3000"
+      - '9000:9000'
     environment:
-      - NODE_ENV=development
-      - DATABASE_HOST=mysql
-      - REDIS_HOST=redis
+      VITE_SERVER_BASEURL: 'http://backend:8000'
+      VITE_UPLOAD_BASEURL: 'https://ukw0y1.laf.run/upload'
     depends_on:
-      - mysql
-      - redis
-    restart: unless-stopped
-    volumes:
-      - .:/app
-      - /app/node_modules
-    command: npm run dev
+      - backend
+    networks:
+      - app-network
 
-  mysql:
-    image: mysql:8.0
+  backend:
+    image: mapan694/backend-app:latest
+    container_name: backend-app
+    ports:
+      - '8000:8000'
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: notifications
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
-    restart: unless-stopped
+      DB_HOST: '192.168.1.100'
+      DB_PORT: '5432'
+      DB_USER: 'myuser'
+      DB_PASSWORD: 'mypass'
+      REDIS_HOST: '192.168.1.101'
+      REDIS_PORT: '6379'
+      # 可继续添加你已有的环境变量
+    networks:
+      - app-network
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-
-volumes:
-  mysql_data:
-  redis_data:
+networks:
+  app-network:
+    driver: bridge
