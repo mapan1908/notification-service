@@ -147,7 +147,7 @@ export class WechatMpStrategy implements INotificationStrategy {
           case 'currency':
             const numValue = parseFloat(String(rawValue));
             if (!isNaN(numValue)) {
-              formattedValue = `${numValue.toFixed(2)}${mappingInfo.currency_symbol || ''}`;
+              formattedValue = `${(numValue / 100).toFixed(2)}${mappingInfo.currency_symbol || ''}`;
             } else {
               LoggerService.warn(`${logPrefix} Invalid number for currency formatting key '${templateKey}', value: '${rawValue}'. Using raw string.`);
               formattedValue = String(rawValue); // 无法格式化，使用原始字符串（或之前处理的空格/备用值）
